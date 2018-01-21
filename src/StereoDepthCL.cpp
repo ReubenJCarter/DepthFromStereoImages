@@ -77,8 +77,10 @@ int main(int argc, char *argv[])
 	"#define blockTW 9\n"
 	"#define blockA 81\n"
 	"#define maxK 200\n"
-	"#define camSeparation 0.62f\n"
-	"#define camFocal 0.1f\n"
+	"#define maxDist 100.0f\n"
+	"#define camSeparation 0.062f\n"
+	"#define camFocal 0.05f\n"
+	"#define pixelScale 0.0005f\n"
 	
 	
 	"__constant sampler_t sampler = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;"
@@ -92,7 +94,7 @@ int main(int argc, char *argv[])
 	
 	"float DepthFromCorrespondence(float cor)"
 	"{"
-	"	return 1.0f - (camSeparation * camFocal) / cor;"
+	"	return (camSeparation * camFocal) / (cor * pixelScale);"
 	"}"
 	
 	
@@ -109,11 +111,20 @@ int main(int argc, char *argv[])
 	"			cache[(i + blockW) * blockTW + j + blockH] = AvPixColor(pixl);"
 	"		}"
 	"	}"
+	
 	"	float lowestsad = 1000.0f;"
+	"	float rightlowestsad = 1000.0f;"
+	"	float leftlowestsad = 1000.0f;"
 	" 	int lowestsadK = 0;"
+	
+	"	float prevSad = 0;"
+	"	bool readNextSad = false; "
+	"	float sad = 0;"
+	
 	"	for(int k = 0; k < maxK; k++)"
 	"	{"
-	"		float sad = 0;"
+	"		prevSad = sad;"
+	"		sad = 0;"
 	"		for(int i = -blockW; i <= blockW; i++)"
 	"		{"
 	"			for(int j = -blockH; j <= blockH; j++)"
@@ -128,14 +139,22 @@ int main(int argc, char *argv[])
 	"				sad += pixAbsDiff;"
 	"			}"
 	"		}"
+	"		if(readNextSad)"
+	"		{"
+	"			leftlowestsad = sad;"
+	"			readNextSad = false;"
+	"		}"
 	"		if(sad < lowestsad)"
 	"		{"
 	"			lowestsad = sad;"
+	"			rightlowestsad = prevSad;"
 	"			lowestsadK = k;"
+	"			readNextSad = true;"
 	"		}"
 	"	}"
-	"	float finalPix = (float)lowestsadK / (float)maxK;"
-	"	finalPix = DepthFromCorrespondence(finalPix);"
+	"	float subPix = (float)lowestsadK - 0.5f * (rightlowestsad - leftlowestsad) / (leftlowestsad - 2.0f * lowestsad + rightlowestsad);"
+	//"	float finalPix = DepthFromCorrespondence((float)lowestsadK);"
+	"	float finalPix = DepthFromCorrespondence(subPix);"
 	"	write_imagef(sadImage, (int2)(pos.x, pos.y), (float4)(finalPix, finalPix, finalPix, 1.0f));"
 	"}";
 	cl_program  clProgram;
