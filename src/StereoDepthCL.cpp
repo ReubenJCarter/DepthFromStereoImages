@@ -6,26 +6,36 @@
 
 int main(int argc, char *argv[])
 {
-	if(argc < 3)
+	if(argc < 2)
 	{
 		std::cerr << "not enough args imageL imageR" << std::endl;
 		return 1; 
 	}
 	//set the block width and heigth variables
-	int blockW = 4;
-	int blockH = 4;
+	int blockW = 11;
+	int blockH = 11;
 	
 	//Load Images from files
-	
 	Image2D imageL;
 	Image2D imageR;
-	std::string fnL = argv[1];
-	std::string fnR = argv[2];
-	std::cout << "loading:" << argv[1] << std::endl;
-	imageL.FromFile(fnL);
-	std::cout << "loading:" << argv[2] << std::endl;
-	imageR.FromFile(fnR);
-	
+	if(argc >= 3)
+	{
+		std::string fnL = argv[1];
+		std::string fnR = argv[2];
+		std::cout << "loading:" << argv[1] << std::endl;
+		imageL.FromFile(fnL);
+		std::cout << "loading:" << argv[2] << std::endl;
+		imageR.FromFile(fnR);
+	}
+	else if(argc == 2)
+	{
+		Image2D image; 
+		std::string fn = argv[1];
+		image.FromFile(fn);
+		image.SplitHor(imageL, imageR);
+		imageL.ToFile("templ.png");
+		imageR.ToFile("tempr.png");
+	}
 	std::cout << "Hi" << std::endl; 
 	
 	//Init OpenCL
@@ -71,13 +81,13 @@ int main(int argc, char *argv[])
 	
 	
 	//Create OpenCL program
-	std::string programSrc = ""
-	"#define blockW 4\n"
-	"#define blockH 4\n"
-	"#define blockTW 9\n"
-	"#define blockA 81\n"
-	"#define maxK 200\n"
-	"#define maxDist 100.0f\n"
+	std::stringstream programSrc;
+	programSrc << "#define blockW " << blockW / 2 << "\n"; 
+	programSrc << "#define blockH " << blockH / 2 << "\n";
+	programSrc << "#define blockTW " << blockW <<"\n"; 
+	programSrc << "#define blockA " << blockW * blockH << "\n";
+	programSrc << "#define maxK " << 80 << "\n";
+	programSrc << ""
 	"#define camSeparation 0.062f\n"
 	"#define camFocal 0.05f\n"
 	"#define pixelScale 0.0005f\n"
@@ -86,7 +96,7 @@ int main(int argc, char *argv[])
 	"__constant sampler_t sampler = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;"
 	
 	
-	"float AvPixColor(float4 pix)"
+	"inline float AvPixColor(float4 pix)"
 	"{"
 	"	return (pix.x + pix.y + pix.z) / 3.0f;"
 	"}"
@@ -101,74 +111,67 @@ int main(int argc, char *argv[])
 	"__kernel void ImageSAD(__read_only image2d_t leftImage, __read_only image2d_t rightImage, __write_only image2d_t sadImage)"
 	"{"
 	"	const int2 pos = {get_global_id(0), get_global_id(1)};"	
-	"	float cache[blockA];"
+	
+	//Init variables
+	"	float cachel[blockA];"
+	"	float lowestsad = 1000.0f;"
+	" 	int lowestsadK = 0;"
+	"	float sad = 0;"
+	
+	//Build Cache for left image 
 	"	for(int i = -blockW; i <= blockW; i++)"
 	"	{"
 	"		for(int j = -blockH; j <= blockH; j++)"
 	"		{"
 	"			int2 posL = (int2)(pos.x + i, pos.y + j);"
 	"			float4 pixl = read_imagef(leftImage, sampler, posL);"
-	"			cache[(i + blockW) * blockTW + j + blockH] = AvPixColor(pixl);"
+	"			float avpixl = AvPixColor(pixl);"
+	"			cachel[(i + blockW) * blockTW + j + blockH] = avpixl;"
 	"		}"
 	"	}"
 	
-	"	float lowestsad = 1000.0f;"
-	"	float rightlowestsad = 1000.0f;"
-	"	float leftlowestsad = 1000.0f;"
-	" 	int lowestsadK = 0;"
-	
-	"	float prevSad = 0;"
-	"	bool readNextSad = false; "
-	"	float sad = 0;"
-	
-	"	for(int k = 0; k < maxK; k++)"
+	//Run SAD operation on right image at each horizontal position
+	"	for(int k = -maxK; k < maxK; k++)"
 	"	{"
-	"		prevSad = sad;"
 	"		sad = 0;"
 	"		for(int i = -blockW; i <= blockW; i++)"
 	"		{"
 	"			for(int j = -blockH; j <= blockH; j++)"
 	"			{"
-	"				int2 posL = (int2)(pos.x + i, pos.y + j);"
 	"				int2 posR = (int2)(pos.x - k + i, pos.y + j);"
-	"				float4 pixl = cache[(i + blockW) * 9 + j + blockH];"
 	"				float4 pixr = read_imagef(rightImage, sampler, posR);"
-	"				float avpixl = AvPixColor(pixl);"
 	"				float avpixr = AvPixColor(pixr);"
+	"				float avpixl = cachel[(i + blockW) * blockTW + j + blockH];"
 	"				float pixAbsDiff = fabs(avpixl - avpixr);"
 	"				sad += pixAbsDiff;"
 	"			}"
 	"		}"
-	"		if(readNextSad)"
-	"		{"
-	"			leftlowestsad = sad;"
-	"			readNextSad = false;"
-	"		}"
 	"		if(sad < lowestsad)"
 	"		{"
 	"			lowestsad = sad;"
-	"			rightlowestsad = prevSad;"
-	"			lowestsadK = k;"
-	"			readNextSad = true;"
+	"			lowestsadK = abs(k);"
 	"		}"
 	"	}"
-	"	float subPix = (float)lowestsadK - 0.5f * (rightlowestsad - leftlowestsad) / (leftlowestsad - 2.0f * lowestsad + rightlowestsad);"
+	
+	//Write out final pixel
 	//"	float finalPix = DepthFromCorrespondence((float)lowestsadK);"
-	"	float finalPix = DepthFromCorrespondence(subPix);"
+	"	float finalPix = (float)lowestsadK / (float)maxK;"
 	"	write_imagef(sadImage, (int2)(pos.x, pos.y), (float4)(finalPix, finalPix, finalPix, 1.0f));"
 	"}";
 	cl_program  clProgram;
-	CreateCLProgram(programSrc, ctx, deviceId, &clProgram); 
+	std::string src = programSrc.str(); 
+	CreateCLProgram(src, ctx, deviceId, &clProgram); 
 	
 	//get Kernel
 	cl_kernel kernel = clCreateKernel(clProgram, "ImageSAD", &err);
 	if(err != CL_SUCCESS) 
 	{
-		std::cerr << "err:"<< GetClErrorString(err) << std::endl;
+		std::cerr << "err:clCreateKernel:"<< GetClErrorString(err) << std::endl;
 		return 0;
 	}
 	
 	//Execute kernel
+	std::cout << "Execute kernel" << std::endl; 
 	cl_event event = NULL;
 	err = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&leftCl);
 	if(err != CL_SUCCESS) std::cerr << "err:clSetKernelArg:leftCl:"<< GetClErrorString(err) << std::endl;
@@ -177,15 +180,23 @@ int main(int argc, char *argv[])
 	err = clSetKernelArg(kernel, 2, sizeof(cl_mem), (void *)&outCl);
 	if(err != CL_SUCCESS) std::cerr << "err:clSetKernelArg:outCl:"<< GetClErrorString(err) << std::endl;
 	const size_t global_work_size[] = {imageOutput.Width(), imageOutput.Height()};
-	const size_t local_work_size[] = {1, 1};
+	const size_t local_work_size[] = {8, 8};
 	err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global_work_size, local_work_size, 0, NULL, &event);
 	if(err != CL_SUCCESS) std::cerr << "err:clEnqueueNDRangeKernel:outCl:"<< GetClErrorString(err) << std::endl;
 	err = clWaitForEvents(1, &event);
+	cl_ulong start = 0, end = 0;
+	clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &start, NULL);
+	clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &end, NULL);
 	
+	
+	std::cout << "Done In " << ((double)(end - start)) / 1000000.0  << " milliseconds" << std::endl; 
+	std::cout << "Image Readback " << std::endl; 
 	//read back image
 	const size_t offset[] ={0, 0, 0};
 	const size_t range[] = {imageOutput.Width(), imageOutput.Height(), 1};
 	err = clEnqueueReadImage(queue, outCl, CL_TRUE, offset, range, imageOutput.Width() * 2, imageOutput.Width() * imageOutput.Height() * 2, imageOutput.Data(), 0, NULL, NULL);
+	
+	
 	
 	//Save Image out
 	imageOutput.ToFile("output.png");

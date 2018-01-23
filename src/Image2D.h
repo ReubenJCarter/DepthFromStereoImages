@@ -22,6 +22,7 @@ class Image2D
 		uint64_t Height();
 		void* Data();
 		void Copy(Image2D& sourceIm);
+		void SplitHor(Image2D& leftIm, Image2D& rightIm);
 		cl_image_desc GetCLDiscriptor();
 		inline uint8_t Pixel(uint64_t x, uint64_t y, uint64_t c)
 		{
@@ -175,6 +176,31 @@ void Image2D::Copy(Image2D& sourceIm)
 	for(uint64_t i = 0; i < Width() * Height() * 4; i++)
 	{
 		((uint8_t*)data)[i] = srcData[i];
+	}
+}
+
+void Image2D::SplitHor(Image2D& leftIm, Image2D& rightIm)
+{
+	uint8_t* srcData = (uint8_t*)Data();
+	leftIm.Allocate(Width() / 2, Height());
+	rightIm.Allocate(Width() / 2, Height());
+	uint8_t* ldata = (uint8_t*)leftIm.Data();
+	uint8_t* rdata = (uint8_t*)rightIm.Data();
+	for(uint64_t j = 0; j < leftIm.Height(); j++)
+	{
+		for(uint64_t i = 0; i < leftIm.Width(); i++)
+		{
+			ldata[(j * leftIm.Width() + i) * 4] = srcData[(j * Width() + i) * 4];
+			ldata[(j * leftIm.Width() + i) * 4 + 1] = srcData[(j * Width() + i) * 4 + 1];
+			ldata[(j * leftIm.Width() + i) * 4 + 2] = srcData[(j * Width() + i) * 4 + 2];
+			ldata[(j * leftIm.Width() + i) * 4 + 3] = srcData[(j * Width() + i) * 4 + 3];
+			
+			rdata[(j * rightIm.Width() + i) * 4] = srcData[(j * Width() + i + Width() / 2) * 4];
+			rdata[(j * rightIm.Width() + i) * 4 + 1] = srcData[(j * Width() + i + Width() / 2) * 4 + 1];
+			rdata[(j * rightIm.Width() + i) * 4 + 2] = srcData[(j * Width() + i + Width() / 2) * 4 + 2];
+			rdata[(j * rightIm.Width() + i) * 4 + 3] = srcData[(j * Width() + i + Width() / 2) * 4 + 3];
+
+		}
 	}
 }
 

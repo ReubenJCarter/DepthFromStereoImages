@@ -96,11 +96,11 @@ bool InitCLFirstGPU(cl_device_id* di, cl_platform_id* pi, cl_context* ctx, cl_co
 	for(int i = 0; i < platformIdCount; i++)
 	{
 		cl_uint deviceIdCount = 0;
-		clGetDeviceIDs(platformIds[i], CL_DEVICE_TYPE_CPU, 0, nullptr, &deviceIdCount);
+		clGetDeviceIDs(platformIds[i], CL_DEVICE_TYPE_GPU, 0, nullptr, &deviceIdCount);
 		if(deviceIdCount > 0)
 		{
 			std::vector<cl_device_id> deviceIds (deviceIdCount);
-			clGetDeviceIDs (platformIds [0], CL_DEVICE_TYPE_CPU, deviceIdCount, deviceIds.data(), nullptr);
+			clGetDeviceIDs (platformIds [0], CL_DEVICE_TYPE_GPU, deviceIdCount, deviceIds.data(), nullptr);
 			deviceId = deviceIds[0];
 			platformId = platformIds[i];
 			ok = true; 
@@ -118,7 +118,7 @@ bool InitCLFirstGPU(cl_device_id* di, cl_platform_id* pi, cl_context* ctx, cl_co
 	props[1] = (cl_context_properties)platformId;
 	*ctx = clCreateContext(props, 1, &deviceId, NULL, NULL, &err );
 	if(err != CL_SUCCESS) return false; 
-	*queue = clCreateCommandQueue(*ctx, deviceId, 0, &err);
+	*queue = clCreateCommandQueue(*ctx, deviceId, CL_QUEUE_PROFILING_ENABLE, &err);
 	if(err != CL_SUCCESS) return false; 
     
 	
