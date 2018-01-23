@@ -43,7 +43,9 @@ int main(int argc, char *argv[])
 	cl_platform_id platformId;
 	cl_context ctx;
 	cl_command_queue queue;
-	bool ok = InitCLFirstGPU(&deviceId, &platformId, &ctx, &queue); 
+	bool ok; 
+	ok = InitCLFirstGPU(&deviceId, &platformId, &ctx, &queue); 
+	//ok = InitCLFirstCPU(&deviceId, &platformId, &ctx, &queue); 
 	
 	if(!ok)
 	{
