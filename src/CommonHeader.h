@@ -9,7 +9,7 @@
 #include <stdint.h>
 #include <math.h>
 
-#define CL_USE_DEPRECATED_OPENCL_2_0_APIS
+#define CL_USE_DEPRECATED_OPENCL_1_2_APIS
 #include <CL/cl.hpp>
 
 #include <IL/il.h>

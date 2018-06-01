@@ -146,7 +146,7 @@ bool InitCLFirstCPU(cl_device_id* di, cl_platform_id* pi, cl_context* ctx, cl_co
 		if(deviceIdCount > 0)
 		{
 			std::vector<cl_device_id> deviceIds (deviceIdCount);
-			clGetDeviceIDs (platformIds [0], CL_DEVICE_TYPE_CPU, deviceIdCount, deviceIds.data(), nullptr);
+			clGetDeviceIDs (platformIds [i], CL_DEVICE_TYPE_CPU, deviceIdCount, deviceIds.data(), nullptr);
 			deviceId = deviceIds[0];
 			platformId = platformIds[i];
 			ok = true; 
